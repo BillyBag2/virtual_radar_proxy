@@ -11,14 +11,20 @@ import time
 
 HELP= sys.argv[0] + " <source address> <source port>"
 
-MSG_ID = 0
-MSG_TYPE = 1
+MSG_ID    = 0
+MSG_TYPE  = 1
 MSG_MODES = 4
-MSG_LAT = 14
-MSG_LONG = 15
+MSG_ALT   = 11
+MSG_LAT   = 14
+MSG_LONG  = 15
 
 g_craft = {}
+g_bytesTotal = 0
+g_bytesFiltered = 0
 
+def hasAlt(n):
+	return (n == 2) or (n == 3) or (n == 5) or (n == 6) or (n == 7)
+	
 def log(line):
 	parts = line.split(",")
 	if parts[MSG_ID] != "MSG":
@@ -27,6 +33,11 @@ def log(line):
 		
 	msgType = int(parts[MSG_TYPE])
 	msgModes = parts[MSG_MODES]
+	
+	if hasAlt(msgType):
+		alt = int(parts[MSG_ALT])
+		if (alt > 50000):
+			print(line)
 	
 	#print(parts[MSG_ID],msgType)
 	if (msgType == 2) or (msgType == 3):
@@ -44,21 +55,25 @@ def log(line):
 		
 		
 def aline(line):
-	#print(">>" + line + "<<")
-	log(line)
+	global g_bytesFiltered
+	global g_bytesTotal
+	g_bytesTotal = g_bytesTotal + len(line)
+	if log(line):
+		g_bytesFiltered =g_bytesFiltered + len(line)
+	
 
 def  proxy(source_address,source_port):
+	global g_bytesFiltered
+	global g_bytesTotal
 	s = socket.create_connection((source_address,source_port))
 	s.setblocking(0)
 	buffer = ""
-	total_bytes = 0
 	timeStart = time.time()
 	timePrint = timeStart
 	while(True):
 		try:
 			data = s.recv(200)
 			newData = data.decode('utf-8')
-			total_bytes = total_bytes + len(newData)
 			buffer = buffer + newData
 			if(data == b''):
 				print("Connction Closed")
@@ -79,9 +94,11 @@ def  proxy(source_address,source_port):
 		except socket.error:
 			now = time.time()
 			if now - timePrint > 10.0:
-				print((total_bytes/(now - timePrint))/1000.0,"kbytes/s")
+				print((g_bytesTotal/(now - timePrint))/1000.0,"kbytes/s")
+				print((g_bytesFiltered/(now - timePrint))/1000.0,"kbytes/s")
 				timePrint = now
-				total_bytes = 0
+				g_bytesTotal = 0
+				g_bytesFiltered =0
 			pass
 	s.close()
 
