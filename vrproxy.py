@@ -7,6 +7,7 @@
 import socket
 import sys
 import time
+import threading
 
 
 HELP= sys.argv[0] + " <source address> <source port>"
@@ -21,6 +22,8 @@ MSG_LONG  = 15
 g_craft = {}
 g_bytesTotal = 0
 g_bytesFiltered = 0
+g_lock = threading.Lock()
+g_clients = []
 
 def hasAlt(n):
 	return (n == 2) or (n == 3) or (n == 5) or (n == 6) or (n == 7)
@@ -36,8 +39,8 @@ def log(line):
 	
 	if hasAlt(msgType):
 		alt = int(parts[MSG_ALT])
-		if (alt > 50000):
-			print(line)
+		#if (alt > 50000):
+			#print(line)
 	
 	#print(parts[MSG_ID],msgType)
 	if (msgType == 2) or (msgType == 3):
@@ -49,11 +52,45 @@ def log(line):
 	if g_craft.get(msgModes) != None:
 		return True
 		
-	print("No location for...",msgModes)
+	#print("No location for...",msgModes)
+	
+def addClient(clientsocket):
+	print("addClient")
+	with g_lock:
+		g_clients.append(clientsocket)
 	
 	
+def getParams(clientsocket):
+	print("getParams")
+	# TODO: Get location from client.
+	addClient(clientsocket)
+	
+
+# none blocking funtion to start a thread to read parames from socket
+def startGetParams(clientsocket):
+	print("startGetParams")
+	thread = threading.Thread(target=getParams, args=(clientsocket,))
+	thread.start()
+	
+
+# Listen for incomming connections.
+def listener(port):
+	print("listener",port,socket.gethostname())
+	serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	serversocket.bind((socket.gethostname(), port))
+	serversocket.listen(5)
+	while True:
+		print("accept")
+		(clientsocket, address) = serversocket.accept()
+		startGetParams(clientsocket)
 		
-		
+# None blocking start listener.	 	
+def startListener(port):
+	print("startListener",port)
+	thread =threading.Thread(target = listener, args=(port,))
+	thread.start()
+	
+	
 def aline(line):
 	global g_bytesFiltered
 	global g_bytesTotal
@@ -65,8 +102,14 @@ def aline(line):
 def  proxy(source_address,source_port):
 	global g_bytesFiltered
 	global g_bytesTotal
+	
+	# incoming data socket
 	s = socket.create_connection((source_address,source_port))
 	s.setblocking(0)
+	
+	# Start listener for clients
+	startListener(50000)
+	
 	buffer = ""
 	timeStart = time.time()
 	timePrint = timeStart
