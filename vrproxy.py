@@ -1,25 +1,51 @@
 #!/bin/python3
 
+
+# usefull Links
+# http://woodair.net/sbs/article/barebones42_socket_data.htm
+
 import socket
 import sys
+import time
 
 
 HELP= sys.argv[0] + " <source address> <source port>"
 
+MSG_ID = 0
+MSG_TYPE = 1
+MSG_LAT = 14
+MSG_LONG = 15
 
+def log(line):
+	parts = line.split(",")
+	if parts[MSG_ID] != "MSG":
+		print("Unknown message type", parts[MSG_TYPE])
+		return
+		
+	msgType = int(parts[MSG_TYPE])
+	print(parts[MSG_ID],msgType)
+	if (msgType == 2) or (msgType == 3):
+		# This contains long and lat.
+		print(parts[MSG_LONG],",",parts[MSG_LAT])
+		
+		
 def aline(line):
-	print(">>" + line + "<<")
-
+	#print(">>" + line + "<<")
+	log(line)
 
 def  proxy(source_address,source_port):
 	s = socket.create_connection((source_address,source_port))
 	s.setblocking(0)
 	buffer = ""
+	total_bytes = 0
+	timeStart = time.time()
+	timePrint = timeStart
 	while(True):
 		try:
 			data = s.recv(200)
-			#print(data)
-			buffer = buffer + data.decode('utf-8')
+			newData = data.decode('utf-8')
+			total_bytes = total_bytes + len(newData)
+			buffer = buffer + newData
 			if(data == b''):
 				print("Connction Closed")
 				break
@@ -37,7 +63,11 @@ def  proxy(source_address,source_port):
 				buffer = lines[-1]
 				#print('************************' + buffer)
 		except socket.error:
-			#print('.')
+			now = time.time()
+			if now - timePrint > 10.0:
+				print((total_bytes/(now - timePrint))/1000.0,"kbytes/s")
+				timePrint = now
+				total_bytes = 0
 			pass
 	s.close()
 
